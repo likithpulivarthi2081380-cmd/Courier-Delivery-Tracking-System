@@ -1,32 +1,43 @@
 #include <iostream>
 #include <fstream>
+#include <cstring>
 using namespace std;
 
 // Base Class
 class Courier {
 protected:
     int id;
-    string sender, receiver, address, status;
+    char sender[50];
+    char receiver[50];
+    char address[100];
+    char status[30];
 
 public:
+    Courier() {
+        id = 0;
+        strcpy(sender, "");
+        strcpy(receiver, "");
+        strcpy(address, "");
+        strcpy(status, "Pending");
+    }
+
+    // Virtual destructor is good practice when using virtual functions
+    virtual ~Courier() {}
+
     void input() {
         cout << "Enter Courier ID: ";
         cin >> id;
-
-        cin.ignore();
         cout << "Enter Sender Name: ";
-        getline(cin, sender);
-
+        cin >> sender;
         cout << "Enter Receiver Name: ";
-        getline(cin, receiver);
-
-        cout << "Enter Address: ";
-        getline(cin, address);
-
-        status = "Pending";
+        cin >> receiver;
+        cout << "Enter Delivery Address: ";
+        cin.ignore();
+        cin.getline(address, 100);
+        strcpy(status, "Pending");
     }
 
-    void display() {
+    virtual void display() {
         cout << "\nID: " << id;
         cout << "\nSender: " << sender;
         cout << "\nReceiver: " << receiver;
@@ -38,51 +49,120 @@ public:
         return id;
     }
 
-    void updateStatus(string newStatus) {
-        status = newStatus;
-    }
-
-    void saveToFile() {
-        ofstream file("courier.txt", ios::app);
-        file << id << "|"
-             << sender << "|"
-             << receiver << "|"
-             << address << "|"
-             << status << endl;
-        file.close();
+    void updateStatus(const char newStatus[]) {
+        strncpy(status, newStatus, 29);
+        status[29] = '\0'; // Ensure null termination
     }
 };
 
-// Display all
-void displayAll() {
-    ifstream file("courier.txt");
-    string line;
+// Derived Class
+class ExpressCourier : public Courier {
+private:
+    int priority;
+
+public:
+    void input() {
+        Courier::input();
+        cout << "Enter Priority (1-High, 2-Medium, 3-Low): ";
+        cin >> priority;
+    }
+
+    void display() override {
+        Courier::display();
+        cout << "Priority: " << priority << endl;
+    }
+};
+
+// Save to file - Note: We save as the base Courier size to keep records uniform 
+// for the update logic to work via seekp.
+void saveToFile(Courier &c) {
+    ofstream file("courier.txt", ios::app | ios::binary);
+    if (!file) {
+        cout << "Error opening file for writing!\n";
+        return;
+    }
+    file.write(reinterpret_cast<char*>(&c), sizeof(Courier));
+    file.close();
+}
+
+// Read from file
+void displayFromFile() {
+    Courier c;
+    ifstream file("courier.txt", ios::binary);
+    
+    if (!file) {
+        cout << "\nNo records found (file does not exist).\n";
+        return;
+    }
 
     cout << "\n--- Courier Records ---\n";
-
-    while (getline(file, line)) {
-        cout << line << endl;
+    while (file.read(reinterpret_cast<char*>(&c), sizeof(Courier))) {
+        c.display();
+        cout << "-----------------------";
     }
+    file.close();
+}
+
+// Update status - Fixed seekp logic
+void updateCourierStatus() {
+    fstream file("courier.txt", ios::in | ios::out | ios::binary);
+    if (!file) {
+        cout << "Error: Could not open file for updating!\n";
+        return;
+    }
+
+    Courier c;
+    int id;
+    char newStatus[30];
+    bool found = false;
+
+    cout << "Enter Courier ID to update: ";
+    cin >> id;
+
+    while (file.read(reinterpret_cast<char*>(&c), sizeof(Courier))) {
+        if (c.getID() == id) {
+            cout << "Current Status: " << c.getID() << " is " << (strlen(c.getID() == 0 ? "Empty" : "Active")) << endl; 
+            cout << "Enter New Status (Shipped/OutForDelivery/Delivered): ";
+            cin >> newStatus;
+
+            c.updateStatus(newStatus);
+
+            // Calculate position: move back one object size from current read position
+            int pos = (int)file.tellg() - sizeof(Courier);
+            file.seekp(pos, ios::beg); 
+            
+            file.write(reinterpret_cast<char*>(&c), sizeof(Courier));
+            
+            cout << "Status Updated Successfully!\n";
+            found = true;
+            break;
+        }
+    }
+
+    if (!found)
+        cout << "Courier ID not found!\n";
 
     file.close();
 }
 
-// Track courier
+// Search by ID
 void trackCourier() {
-    ifstream file("courier.txt");
-    string line;
-    int searchID;
-
-    cout << "Enter ID to track: ";
-    cin >> searchID;
-
+    Courier c;
+    ifstream file("courier.txt", ios::binary);
+    int id;
     bool found = false;
 
-    while (getline(file, line)) {
-        int id = stoi(line.substr(0, line.find("|")));
+    if (!file) {
+        cout << "Error opening file!\n";
+        return;
+    }
 
-        if (id == searchID) {
-            cout << "\nFound:\n" << line << endl;
+    cout << "Enter Courier ID to track: ";
+    cin >> id;
+
+    while (file.read(reinterpret_cast<char*>(&c), sizeof(Courier))) {
+        if (c.getID() == id) {
+            c.display();
             found = true;
             break;
         }
@@ -94,59 +174,14 @@ void trackCourier() {
     file.close();
 }
 
-// Update status
-void updateStatus() {
-    ifstream file("courier.txt");
-    ofstream temp("temp.txt");
-
-    string line;
-    int searchID;
-    string newStatus;
-
-    cout << "Enter ID to update: ";
-    cin >> searchID;
-
-    cin.ignore();
-    cout << "Enter new status: ";
-    getline(cin, newStatus);
-
-    bool found = false;
-
-    while (getline(file, line)) {
-        int pos = line.find("|");
-        if (pos == string::npos) continue;
-
-        int id = stoi(line.substr(0, pos));
-
-        if (id == searchID) {
-            size_t last = line.rfind("|");
-            line = line.substr(0, last + 1) + newStatus;
-            found = true;
-        }
-
-        temp << line << endl;
-    }
-
-    file.close();
-    temp.close();
-
-    remove("courier.txt");
-    rename("temp.txt", "courier.txt");
-
-    if (found)
-        cout << "Status updated successfully!\n";
-    else
-        cout << "Courier ID not found!\n";
-}
-
 // MAIN
 int main() {
     int choice;
 
     do {
-        cout << "\n===== Courier System =====\n";
+        cout << "\n===== Courier Delivery System =====\n";
         cout << "1. Add Courier\n";
-        cout << "2. Display All\n";
+        cout << "2. Display All Couriers\n";
         cout << "3. Track Courier\n";
         cout << "4. Update Status\n";
         cout << "5. Exit\n";
@@ -154,26 +189,34 @@ int main() {
         cin >> choice;
 
         if (choice == 1) {
-            Courier c;
-            c.input();
-            c.saveToFile();
-            cout << "Added successfully!\n";
-        }
+            int type;
+            cout << "1. Normal Courier\n2. Express Courier\nChoose type: ";
+            cin >> type;
 
+            if (type == 1) {
+                Courier c;
+                c.input();
+                saveToFile(c);
+            } else {
+                ExpressCourier ec;
+                ec.input();
+                // Note: To keep file seeking simple, we save only the base part
+                saveToFile(ec); 
+            }
+            cout << "Courier Added Successfully!\n";
+        }
         else if (choice == 2) {
-            displayAll();
+            displayFromFile();
         }
-
         else if (choice == 3) {
             trackCourier();
         }
-
         else if (choice == 4) {
-            updateStatus();
+            updateCourierStatus();
         }
 
     } while (choice != 5);
 
-    cout << "Thank you!\n";
+    cout << "Thank You!\n";
     return 0;
 }
