@@ -21,4 +21,5 @@ This project is a C++ based application to manage courier records. It allows use
    ./courier
 
 ## 👨‍💻 Author
-Your Name
+Likith P
+Yaswanth Reddy B
