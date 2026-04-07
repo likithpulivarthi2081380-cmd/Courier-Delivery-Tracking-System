@@ -113,11 +113,14 @@ void updateStatus() {
     bool found = false;
 
     while (getline(file, line)) {
-        int id = stoi(line.substr(0, line.find("|")));
+        int pos = line.find("|");
+        if (pos == string::npos) continue;
+
+        int id = stoi(line.substr(0, pos));
 
         if (id == searchID) {
-            size_t pos = line.rfind("|");
-            line = line.substr(0, pos + 1) + newStatus;
+            size_t last = line.rfind("|");
+            line = line.substr(0, last + 1) + newStatus;
             found = true;
         }
 
@@ -131,9 +134,9 @@ void updateStatus() {
     rename("temp.txt", "courier.txt");
 
     if (found)
-        cout << "Status updated!\n";
+        cout << "Status updated successfully!\n";
     else
-        cout << "Courier not found!\n";
+        cout << "Courier ID not found!\n";
 }
 
 // MAIN
